@@ -15,15 +15,14 @@ import {
   _ZPVerifyPaymentObject,
   _ZPInquiryObject,
   IDriverClient,
+  _ZPFeeCalculationObject,
+  ZPFeeCalculationRawResult,
+  IFeeCalculationRequired,
 } from "../../types";
 import { IPGBaseError } from "../../structures/errors";
 import axios, { AxiosError } from "axios";
 
-export class ZarinpalDriver extends BaseClient<
-  ICreatePaymentRequired & ICreatePaymentOptional,
-  ZPVerifyRawResult,
-  ZPInquiryRawResult
-> {
+export class ZarinpalDriver extends BaseClient<ICreatePaymentRequired & ICreatePaymentOptional, ZPVerifyRawResult, ZPInquiryRawResult> {
   constructor(
     token: string,
     isSandbox = false,
@@ -36,13 +35,7 @@ export class ZarinpalDriver extends BaseClient<
 
   sandbox(
     on: boolean,
-  ): ThisType<
-    IDriverClient<
-      ICreatePaymentRequired & ICreatePaymentOptional,
-      ZPVerifyRawResult,
-      Record<string, unknown>
-    >
-  > {
+  ): ThisType<IDriverClient<ICreatePaymentRequired & ICreatePaymentOptional, ZPVerifyRawResult, Record<string, unknown>>> {
     if (on) this.rebuildHTTP("https://sandbox.zarinpal.com/pg/v4/payment");
     else this.rebuildHTTP();
 
@@ -62,16 +55,7 @@ export class ZarinpalDriver extends BaseClient<
         referrer_id?: string;
       },
   ): Promise<ICreatePaymentResult> {
-    const {
-      orderId,
-      amount,
-      callback_url,
-      phone,
-      mail,
-      description,
-      currency,
-      referrer_id,
-    } = opts;
+    const { orderId, amount, callback_url, phone, mail, description, currency, referrer_id } = opts;
     const zpObj: _ZPRawCreatePaymentObject = {
       order_id: orderId,
       amount: BigNumber(amount).toNumber(),
@@ -93,17 +77,11 @@ export class ZarinpalDriver extends BaseClient<
     }
 
     try {
-      const result = await this.http.post<_ZPCreatePaymentRawResult>(
-        "/request.json",
-        zpObj,
-      );
-      if (result.status === 200 || result.status === 201)
-        return this.toCreatePaymentResult(result.data);
+      const result = await this.http.post<_ZPCreatePaymentRawResult>("/request.json", zpObj);
+      if (result.status === 200 || result.status === 201) return this.toCreatePaymentResult(result.data);
       else
         throw new IPGBaseError(
-          Array.isArray(result.data.errors)
-            ? result.data.errors.join(",")
-            : result.data.errors.message,
+          Array.isArray(result.data.errors) ? result.data.errors.join(",") : result.data.errors.message,
           result.data.data.code,
         );
     } catch (error) {
@@ -113,17 +91,13 @@ export class ZarinpalDriver extends BaseClient<
       if (!err.response) throw new IPGBaseError(err.message, err.code ?? 500);
 
       throw new IPGBaseError(
-        Array.isArray(err.response.data.errors)
-          ? err.response.data.errors.join(",")
-          : err.response.data.errors.message,
+        Array.isArray(err.response.data.errors) ? err.response.data.errors.join(",") : err.response.data.errors.message,
         err.response.data.data.code ?? err.response.status,
       );
     }
   }
 
-  async verifyPayment(
-    opts: IVerifyPaymentRequired,
-  ): Promise<IVerifyPaymentResult<ZPVerifyRawResult>> {
+  async verifyPayment(opts: IVerifyPaymentRequired): Promise<IVerifyPaymentResult<ZPVerifyRawResult>> {
     const { authorityId, amount } = opts;
 
     const zpObj: _ZPVerifyPaymentObject = {
@@ -132,18 +106,12 @@ export class ZarinpalDriver extends BaseClient<
       merchant_id: this.getToken(),
     };
     try {
-      const result = await this.http.post<ZPVerifyRawResult>(
-        "/verify.json",
-        zpObj,
-      );
+      const result = await this.http.post<ZPVerifyRawResult>("/verify.json", zpObj);
 
-      if (result.status === 200 || result.status === 201)
-        return this.toVerifyPaymentResult(result.data);
+      if (result.status === 200 || result.status === 201) return this.toVerifyPaymentResult(result.data);
       else
         throw new IPGBaseError(
-          Array.isArray(result.data.errors)
-            ? result.data.errors.join(",")
-            : result.data.errors.message,
+          Array.isArray(result.data.errors) ? result.data.errors.join(",") : result.data.errors.message,
           result.data.data.code,
         );
     } catch (error) {
@@ -153,17 +121,44 @@ export class ZarinpalDriver extends BaseClient<
       if (!err.response) throw new IPGBaseError(err.message, err.code ?? 500);
 
       throw new IPGBaseError(
-        Array.isArray(err.response.data.errors)
-          ? err.response.data.errors.join(",")
-          : err.response.data.errors.message,
+        Array.isArray(err.response.data.errors) ? err.response.data.errors.join(",") : err.response.data.errors.message,
         err.response.status,
       );
     }
   }
 
-  async inquiryPayment(
-    opts: IinquiryPaymentRequired,
-  ): Promise<BasePaymentStatus<ZPInquiryRawResult>> {
+  async feeCalculation(opts: IFeeCalculationRequired): Promise<ZPFeeCalculationRawResult> {
+    const { amount, currency } = opts;
+    const zpObj: _ZPFeeCalculationObject = {
+      merchant_id: this.getToken(),
+      amount: BigNumber(amount).toNumber(),
+      currency,
+    };
+
+    try {
+      const endpoint = this.isSandbox ? "https://payment.zarinpal.com/pg/v4/payment/feeCalculation.json" : "/feeCalculation.json";
+      const result = await this.http.post<ZPFeeCalculationRawResult>(endpoint, zpObj);
+
+      if (result.status === 200 || result.status === 201) return this.toFeeCalculationResult(result.data);
+      else
+        throw new IPGBaseError(
+          Array.isArray(result.data.errors) ? result.data.errors.join(",") : result.data.errors.message,
+          result.data.data.code,
+        );
+    } catch (error) {
+      if (!axios.isAxiosError(error)) throw error;
+
+      const err: AxiosError<_ZPCreatePaymentRawResult> = error;
+      if (!err.response) throw new IPGBaseError(err.message, err.code ?? 500);
+
+      throw new IPGBaseError(
+        Array.isArray(err.response.data.errors) ? err.response.data.errors.join(",") : err.response.data.errors.message,
+        err.response.data.data.code ?? err.response.status,
+      );
+    }
+  }
+
+  async inquiryPayment(opts: IinquiryPaymentRequired): Promise<BasePaymentStatus<ZPInquiryRawResult>> {
     const { authorityId } = opts;
 
     const zpObj: _ZPInquiryObject = {
@@ -172,18 +167,12 @@ export class ZarinpalDriver extends BaseClient<
     };
 
     try {
-      const result = await this.http.post<ZPInquiryRawResult>(
-        "/inquiry.json",
-        zpObj,
-      );
+      const result = await this.http.post<ZPInquiryRawResult>("/inquiry.json", zpObj);
 
-      if (result.status === 200 || result.status === 201)
-        return this.toInquiryResult(result.data);
+      if (result.status === 200 || result.status === 201) return this.toInquiryResult(result.data);
       else
         throw new IPGBaseError(
-          Array.isArray(result.data.errors)
-            ? result.data.errors.join(",")
-            : result.data.errors.message,
+          Array.isArray(result.data.errors) ? result.data.errors.join(",") : result.data.errors.message,
           result.data.data.code,
         );
     } catch (error) {
@@ -193,9 +182,7 @@ export class ZarinpalDriver extends BaseClient<
       if (!err.response) throw new IPGBaseError(err.message, err.code ?? 500);
 
       throw new IPGBaseError(
-        Array.isArray(err.response.data.errors)
-          ? err.response.data.errors.join(",")
-          : err.response.data.errors.message,
+        Array.isArray(err.response.data.errors) ? err.response.data.errors.join(",") : err.response.data.errors.message,
         err.response.data.data.code ?? err.response.status,
       );
     }
@@ -208,9 +195,7 @@ export class ZarinpalDriver extends BaseClient<
     };
   }
 
-  toVerifyPaymentResult(
-    raw: ZPVerifyRawResult,
-  ): IVerifyPaymentResult<ZPVerifyRawResult> {
+  toVerifyPaymentResult(raw: ZPVerifyRawResult): IVerifyPaymentResult<ZPVerifyRawResult> {
     return {
       status:
         raw.data.code === "101" || raw.data.code === 101
@@ -234,26 +219,32 @@ export class ZarinpalDriver extends BaseClient<
           : "failed",
       statusCode: raw.data.code as string,
       card:
-        raw.data.code === "101" ||
-        raw.data.code === 101 ||
-        raw.data.code === "100" ||
-        raw.data.code === 100
+        raw.data.code === "101" || raw.data.code === 101 || raw.data.code === "100" || raw.data.code === 100
           ? raw.data.card_pan
           : undefined,
       cardHash:
-        raw.data.code === "101" ||
-        raw.data.code === 101 ||
-        raw.data.code === "100" ||
-        raw.data.code === 100
+        raw.data.code === "101" || raw.data.code === 101 || raw.data.code === "100" || raw.data.code === 100
           ? raw.data.card_hash
           : undefined,
       raw,
     };
   }
 
-  toInquiryResult(
-    raw: ZPInquiryRawResult,
-  ): BasePaymentStatus<ZPInquiryRawResult> {
+  toFeeCalculationResult(raw: ZPFeeCalculationRawResult): ZPFeeCalculationRawResult {
+    return {
+      data: {
+        code: raw.data.code,
+        message: raw.data.message,
+        amount: raw.data.amount,
+        fee: raw.data.fee,
+        fee_type: raw.data.fee_type,
+        suggested_amount: raw.data.suggested_amount,
+      },
+      errors: raw.errors,
+    };
+  }
+
+  toInquiryResult(raw: ZPInquiryRawResult): BasePaymentStatus<ZPInquiryRawResult> {
     return {
       status:
         raw.data.code === "101" || raw.data.code === 101

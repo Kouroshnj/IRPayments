@@ -118,6 +118,24 @@ export interface ZPInquiryRawResult extends Record<string, unknown> {
       };
 }
 
+export interface ZPFeeCalculationRawResult extends Record<string, unknown> {
+  data: {
+    code: ZPStatusCodes;
+    message: string;
+    amount: number;
+    fee: number;
+    fee_type: string;
+    suggested_amount: string;
+  };
+  errors:
+    | string[]
+    | {
+        message: string;
+        code: number;
+        validations: unknown[];
+      };
+}
+
 export interface _ZPRawCreatePaymentObject {
   merchant_id: string;
   amount: number;
@@ -162,4 +180,10 @@ export interface _ZPVerifyPaymentObject {
 export interface _ZPInquiryObject {
   merchant_id: string;
   authority: string;
+}
+
+export interface _ZPFeeCalculationObject {
+  merchant_id: string;
+  amount: number;
+  currency: string;
 }
